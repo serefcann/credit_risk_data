@@ -158,10 +158,27 @@ set(app_test) - set(app_train)
 idx_NITM = app_train.columns.get_loc('NAME_INCOME_TYPE_Maternity leave')
 
 if 'NAME_INCOME_TYPE_Maternity leave' not in app_test.columns:
-    app_test.insert(idx_NITM, 'NAME_INCOME_TYPE_Maternity leave', pd.Series([0*len(app_test)]))
+    app_test.insert(idx_NITM, 'NAME_INCOME_TYPE_Maternity leave', pd.Series([0 * len(app_test)]))
 
 set(app_train) - set(app_test)
 set(app_test) - set(app_train)
 
 # Columns inconsistency problem solved
+
+corr = app_train.corr()['TARGET'].sort_values(ascending=True)
+corr.tail(30)
+corr.head(30)
+
+app_train['DAYS_BIRTH_YEARS'] = -app_train['DAYS_BIRTH'] / 365
+
+
+
+
+
+
+
+
+
+
+
 

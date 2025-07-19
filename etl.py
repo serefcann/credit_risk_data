@@ -35,18 +35,31 @@ tables = [
 ]
 dfs = {}
 
+
 # Extract tables from mysql to python dictionaries
-for table in tables:
-    dfs[table] = pd.read_sql(f"select * from {table}",con = engine)
-    print(f'{table} successfully added into the dfs')
-    
-print(dfs.keys())
+def load_tables_from_db():
+    for table in tables:
+        dfs[table] = pd.read_sql(f"select * from {table}",con = engine)
+        print(f'{table} successfully added into the dfs')
+        
+        # divide into train and test
+    dfs['application_train'] = dfs['application_combined'][dfs['application_combined']['TARGET'].notna()].copy()
+    dfs['application_test'] = dfs['application_combined'][dfs['application_combined']['TARGET'].isna()].copy()
+    dfs.pop('application_combined')
 
-# divide into train and test
-dfs['application_train'] = dfs['application_combined'][dfs['application_combined']['TARGET'].notna()].copy()
-dfs['application_test'] = dfs['application_combined'][dfs['application_combined']['TARGET'].isna()].copy()
-dfs.pop('application_combined')
+    app_train = dfs['application_train'].copy()
+    app_test = dfs['application_test'].copy()
+    app_train = app_train[app_test.columns]
+    print(dfs.keys())
 
+
+def save_df_to_csv():
+    app_train.to_csv("C:\\Users\\şerefcanmemiş\\Downloads\\home-credit-default-risk\\app_train.csv", header = True, index= False)
+    app_test.to_csv("C:\\Users\\şerefcanmemiş\\Downloads\\home-credit-default-risk\\app_test.csv", header = True, index= False)
+
+
+app_train = pd.read_csv("C:\\Users\\şerefcanmemiş\\Downloads\\home-credit-default-risk\\app_train.csv")
+app_test = pd.read_csv("C:\\Users\\şerefcanmemiş\\Downloads\\home-credit-default-risk\\app_test.csv")
 
 # Checking null values
 tables = [
@@ -60,7 +73,6 @@ tables = [
     'previous_application',
     'sample_submission'
 ]
-
 # Check the null percentage of columns
 def null_percentage():
     for table in tables:
@@ -94,9 +106,7 @@ def drop_null_colums(percentage):
             
 
 # Copying our train and test tables
-app_train = dfs['application_train'].copy()
-app_test = dfs['application_test'].copy()
-app_train = app_train[app_test.columns]
+
 
 # Check if the 2 tables columns are the same
 if list(app_train.columns) == list(app_test.columns):
@@ -171,11 +181,7 @@ corr.head(30)
 
 app_train['DAYS_BIRTH_YEARS'] = -app_train['DAYS_BIRTH'] / 365
 
-
-
-
-
-
+np.histogram(app_train['DAYS_BIRTH_YEARS'], bins = 10)
 
 
 

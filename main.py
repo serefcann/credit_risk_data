@@ -5,9 +5,13 @@ import matplotlib.pyplot as plt
 import os
 from sqlalchemy import create_engine
 from dotenv import load_dotenv
-from sklearn.preprocessing import LabelEncoder, PolynomialFeatures
+from sklearn.preprocessing import LabelEncoder, PolynomialFeatures, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+from sklearn.metrics import roc_auc_score,classification_report
+from sklearn.model_selection import cross_val_score
 
 # load .env
 load_dotenv(r"C:\Users\şerefcanmemiş\Documents\projects_2\data_handle\.env")
@@ -305,4 +309,30 @@ train = app_train.copy()
 test = app_test.copy()
 
 train_target = train['TARGET']
-train.drop('TARGET',axis = 1, inplace= True)
+if 'TARGET' in train.columns:
+    train.drop('TARGET',axis = 1, inplace= True)
+else:
+    print('train already does not have TARGET column')
+    
+# Preprocessing pipeline
+num_pipeline = Pipeline(steps=[
+    ('imputer', SimpleImputer(strategy='median')),
+    ('scaler', StandardScaler())
+])
+
+preprocessor = ColumnTransformer(transformers=[
+    ('num', num_pipeline, train.columns.to_list())
+])
+train = preprocessor.fit_transform(train)
+test = preprocessor.transform(test)
+
+# Logistic Regression
+lr = LogisticRegression(max_iter=3000)
+lr.fit(train,train_target)
+lr.predict_proba(test)[:,1]
+train_pred = lr.predict(train)
+roc_auc_score(train_pred,train_target)
+
+# cross validation
+cross_val_score(lr, train, train_target, cv=5, scoring='roc_auc', n_jobs=-1) # around 0.74 - 0.75
+

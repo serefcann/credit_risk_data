@@ -175,15 +175,17 @@ set(app_test) - set(app_train)
 
 # Columns inconsistency problem solved
 
+# Correlation between target and other features (age have positive impact and ext1,ext2,ext3 have negative impact)
 corr = app_train.corr()['TARGET'].sort_values(ascending=True)
 corr.tail(30)
 corr.head(30)
 
 app_train['DAYS_BIRTH_YEARS'] = -app_train['DAYS_BIRTH'] / 365
 
-np.histogram(app_train['DAYS_BIRTH_YEARS'], bins = 10)
-
-
+# Checking whether younger or older people are linked to late repayment of the loan
+agg = app_train[['DAYS_BIRTH_YEARS','DAYS_BIRTH','TARGET','AMT_CREDIT']].copy()
+agg['DAYS_BIRTH_YEARS'] = pd.qcut(agg['DAYS_BIRTH_YEARS'], q= 8)
+agg.groupby('DAYS_BIRTH_YEARS').mean()
 
 
 

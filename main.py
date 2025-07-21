@@ -12,6 +12,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.metrics import roc_auc_score,classification_report
 from sklearn.model_selection import cross_val_score
+from sklearn.ensemble import RandomForestClassifier
 
 # load .env
 load_dotenv(r"C:\Users\şerefcanmemiş\Documents\projects_2\data_handle\.env")
@@ -248,42 +249,54 @@ poly_features_train = app_train[['EXT_SOURCE_1','EXT_SOURCE_2','EXT_SOURCE_3','D
 poly_features_test =  app_test[['EXT_SOURCE_1','EXT_SOURCE_2','EXT_SOURCE_3','DAYS_BIRTH']].copy()
 
 
+
 poly_target = poly_features_train['TARGET'].copy()
 poly_features_train = poly_features_train.drop('TARGET',axis=1)
 # imputing na values
-imp = SimpleImputer(missing_values=np.nan, strategy='median')
-imp.fit(poly_features_train)
-poly_train = imp.transform(poly_features_train)
-poly_test = imp.transform(poly_features_test)
+def impute_na(poly_features_train, poly_features_test):
+    imp = SimpleImputer(missing_values=np.nan, strategy='median')
+    imp.fit(poly_features_train)
+    poly_train = imp.transform(poly_features_train)
+    poly_test = imp.transform(poly_features_test)
+    return poly_train, poly_test
+poly_train, poly_test = impute_na(poly_features_train, poly_features_test)
 
 # create Polynomial features
-poly_transformer = PolynomialFeatures(degree=3)
-poly_train = poly_transformer.fit_transform(poly_train)
-poly_test = poly_transformer.transform(poly_test)
-poly_columns = poly_transformer.get_feature_names_out(['EXT_SOURCE_1','EXT_SOURCE_2','EXT_SOURCE_3','DAYS_BIRTH'])
+def create_poly_features(poly_train, poly_test):
+    poly_transformer = PolynomialFeatures(degree=3)
+    poly_train = poly_transformer.fit_transform(poly_train)
+    poly_test = poly_transformer.transform(poly_test)
+    poly_columns = poly_transformer.get_feature_names_out(['EXT_SOURCE_1','EXT_SOURCE_2','EXT_SOURCE_3','DAYS_BIRTH'])
 
-poly_features_train = pd.DataFrame(data = poly_train, columns= poly_columns)
-poly_features_test = pd.DataFrame(data = poly_test, columns= poly_columns)
-print(poly_features_train.shape)
-print(poly_features_test.shape)
+    poly_features_train = pd.DataFrame(data = poly_train, columns= poly_columns)
+    poly_features_test = pd.DataFrame(data = poly_test, columns= poly_columns)
+    print(poly_features_train.shape)
+    print(poly_features_test.shape)
+    return poly_features_train, poly_features_test
+poly_train, poly_test = create_poly_features(poly_train, poly_test)
 
-poly_features_train['TARGET'] = poly_target
+poly_train['TARGET'] = poly_target
 
 # lets check out new features correlations
-poly_corr = poly_features_train.corr()['TARGET'].sort_values()
-poly_corr
+def poly_corr(poly_train):
+    poly_corr = poly_train.corr()['TARGET'].sort_values()
+    print(poly_corr)
+poly_corr(poly_train)
 
 # Left join poly and app data
-poly_features_train['SK_ID_CURR'] = app_train['SK_ID_CURR']
-poly_features_test['SK_ID_CURR'] = app_train['SK_ID_CURR']
-app_train_poly = app_train.merge(poly_features_train, on='SK_ID_CURR', how= 'left')
-app_test_poly = app_test.merge(poly_features_test, on='SK_ID_CURR', how= 'left')
-print("Poly train shape:",app_train_poly.shape)
-print("Poly test shape", app_test_poly.shape)
+def leftjoin_poly_app_data(poly_train, poly_test, app_train, app_test):
+    poly_train['SK_ID_CURR'] = app_train['SK_ID_CURR']
+    poly_test['SK_ID_CURR'] = app_train['SK_ID_CURR']
+    app_train_poly = app_train.merge(poly_train, on='SK_ID_CURR', how= 'left')
+    app_test_poly = app_test.merge(poly_test, on='SK_ID_CURR', how= 'left')
+    print("Poly train shape:",app_train_poly.shape)
+    print("Poly test shape", app_test_poly.shape)
 
-app_train_poly, app_test_poly = app_train_poly.align(app_test_poly, join='inner', axis = 1)
-print("Poly train shape:",app_train_poly.shape)
-print("Poly test shape", app_test_poly.shape)
+    app_train_poly, app_test_poly = app_train_poly.align(app_test_poly, join='inner', axis = 1)
+    print("Poly train shape:",app_train_poly.shape)
+    print("Poly test shape", app_test_poly.shape)
+    return app_train_poly, app_test_poly
+app_train_poly, app_test_poly = leftjoin_poly_app_data(poly_train, poly_test, app_train, app_test)
 
 
 # Domain features
@@ -291,48 +304,119 @@ app_train.columns[:20]
 app_train_domain = app_train.copy()
 app_test_domain = app_test.copy()
 
-app_train_domain['CREDIT_INCOME_PERCENT'] = app_train_domain['AMT_CREDIT'] / app_train_domain['AMT_INCOME_TOTAL']
-app_train_domain['DAYS_EMPLOYED_PERCENT'] = app_train_domain['DAYS_EMPLOYED'] / -app_train_domain['DAYS_BIRTH']
-app_train_domain['INCOME_PER_PERSON_FAMILY'] = app_train_domain['AMT_INCOME_TOTAL'] / app_train_domain['CNT_CHILDREN']
-app_train_domain['ANNUITY_INCOME_PERCENT'] = app_train_domain['AMT_ANNUITY'] / app_train_domain['AMT_INCOME_TOTAL']
-app_train_domain['CREDIT_TERM'] = app_train_domain['AMT_ANNUITY'] / app_train_domain['AMT_CREDIT']
+def create_domain_df(app_train_domain, app_test_domain):
+    app_train_domain['CREDIT_INCOME_PERCENT'] = app_train_domain['AMT_CREDIT'] / app_train_domain['AMT_INCOME_TOTAL']
+    app_train_domain['DAYS_EMPLOYED_PERCENT'] = app_train_domain['DAYS_EMPLOYED'] / -app_train_domain['DAYS_BIRTH']
+    app_train_domain['INCOME_PER_PERSON_FAMILY'] = app_train_domain['AMT_INCOME_TOTAL'] / (app_train_domain['CNT_CHILDREN'] + 1)
+    app_train_domain['ANNUITY_INCOME_PERCENT'] = app_train_domain['AMT_ANNUITY'] / app_train_domain['AMT_INCOME_TOTAL']
+    app_train_domain['CREDIT_TERM'] = app_train_domain['AMT_ANNUITY'] / app_train_domain['AMT_CREDIT']
 
-app_test_domain['CREDIT_INCOME_PERCENT'] = app_test_domain['AMT_CREDIT'] / app_test_domain['AMT_INCOME_TOTAL']
-app_test_domain['DAYS_EMPLOYED_PERCENT'] = app_test_domain['DAYS_EMPLOYED'] / -app_test_domain['DAYS_BIRTH']
-app_test_domain['INCOME_PER_PERSON_FAMILY'] = app_test_domain['AMT_INCOME_TOTAL'] / app_test_domain['CNT_CHILDREN']
-app_test_domain['ANNUITY_INCOME_PERCENT'] = app_test_domain['AMT_ANNUITY'] / app_test_domain['AMT_INCOME_TOTAL']
-app_test_domain['CREDIT_TERM'] = app_test_domain['AMT_ANNUITY'] / app_test_domain['AMT_CREDIT']
+    app_test_domain['CREDIT_INCOME_PERCENT'] = app_test_domain['AMT_CREDIT'] / app_test_domain['AMT_INCOME_TOTAL']
+    app_test_domain['DAYS_EMPLOYED_PERCENT'] = app_test_domain['DAYS_EMPLOYED'] / -app_test_domain['DAYS_BIRTH']
+    app_test_domain['INCOME_PER_PERSON_FAMILY'] = app_test_domain['AMT_INCOME_TOTAL'] / (app_test_domain['CNT_CHILDREN'] + 1)
+    app_test_domain['ANNUITY_INCOME_PERCENT'] = app_test_domain['AMT_ANNUITY'] / app_test_domain['AMT_INCOME_TOTAL']
+    app_test_domain['CREDIT_TERM'] = app_test_domain['AMT_ANNUITY'] / app_test_domain['AMT_CREDIT']
+    return app_train_domain, app_test_domain
+
+app_train_domain, app_test_domain = create_domain_df(app_train_domain, app_test_domain)
 
 
 # Let continue with Modelling
 train = app_train.copy()
 test = app_test.copy()
 
-train_target = train['TARGET']
-if 'TARGET' in train.columns:
-    train.drop('TARGET',axis = 1, inplace= True)
-else:
-    print('train already does not have TARGET column')
+def drop_target(train):
+    if 'TARGET' in train.columns:
+        train_target = train['TARGET']
+        train.drop('TARGET',axis = 1, inplace= True)
+    else:
+        print('train already does not have TARGET column')
+    return train_target
     
-# Preprocessing pipeline
-num_pipeline = Pipeline(steps=[
-    ('imputer', SimpleImputer(strategy='median')),
-    ('scaler', StandardScaler())
-])
+train_target = drop_target(train = train)
 
-preprocessor = ColumnTransformer(transformers=[
-    ('num', num_pipeline, train.columns.to_list())
-])
-train = preprocessor.fit_transform(train)
-test = preprocessor.transform(test)
+# Preprocessing
+def drop_id(df):
+    if 'SK_ID_CURR' in df.columns:
+        df.drop('SK_ID_CURR',axis = 1, inplace= True)
+    else:
+        print('df already does not have SK_ID_CURR')
+drop_id(train)
+drop_id(test)
+    
+def pipeline(train, test):
+    num_pipeline = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+
+    preprocessor = ColumnTransformer(transformers=[
+        ('num', num_pipeline, train.columns.to_list())
+    ])
+    train = preprocessor.fit_transform(train)
+    test = preprocessor.transform(test)
+    return train, test
+train, test = pipeline(train, test)
 
 # Logistic Regression
-lr = LogisticRegression(max_iter=3000)
-lr.fit(train,train_target)
-lr.predict_proba(test)[:,1]
-train_pred = lr.predict(train)
-roc_auc_score(train_pred,train_target)
+def logistic_regression_results(train, test, train_target):
+    lr = LogisticRegression(max_iter=3000)
+    lr.fit(train,train_target)
+    proba = lr.predict_proba(test)[:,1]
 
-# cross validation
-cross_val_score(lr, train, train_target, cv=5, scoring='roc_auc', n_jobs=-1) # around 0.74 - 0.75
+    # cross validation
+    cvl = cross_val_score(lr, train, train_target, cv=5, scoring='roc_auc', n_jobs=-1) # around 0.74 - 0.75
+    print("predict_proba results:", proba)
+    print("cross validation score roc_auc:", cvl)
+logistic_regression_results(train, test, train_target)
+
+
+# Random Forest
+train = app_train.copy()
+test = app_test.copy()
+
+# preprocessing
+train_target = drop_target(train)
+drop_id(train)
+drop_id(test)
+# no need to scale in ensemble models
+train, test = pipeline(train, test)
+
+def random_forest_results(train, test, train_target):
+    rfc = RandomForestClassifier()
+    rfc.fit(train,train_target)
+    proba = rfc.predict_proba(test)[:,1]
+
+    # cross validation
+    cvl = cross_val_score(rfc, train, train_target, cv=5, scoring='roc_auc', n_jobs=-1) 
+    print("predict_proba results:", proba)
+    print("cross validation score roc_auc:", cvl)
+random_forest_results(train, test, train_target) # cv around 0.74 - 0.75
+
+
+# Random Forest for polynomial features
+train = poly_train.copy()
+test = poly_test.copy()
+
+# preprocessing
+train_target = drop_target()
+drop_id(train)
+drop_id(test)
+
+train, test = pipeline(train, test)
+
+random_forest_results(train, test, train_target)
+
+# Random Forest for domain featues
+train = poly_train.copy()
+test = poly_test.copy()
+
+# Preprocessing
+train_target = drop_target(train)
+drop_id(train)
+drop_id(test)
+
+train, test = pipeline(train, test)
+
+random_forest_results(train, test, train_target)
 

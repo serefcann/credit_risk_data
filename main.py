@@ -248,8 +248,6 @@ app_test = app_test.drop('TARGET', axis = 1)
 poly_features_train = app_train[['EXT_SOURCE_1','EXT_SOURCE_2','EXT_SOURCE_3','DAYS_BIRTH','TARGET']].copy()
 poly_features_test =  app_test[['EXT_SOURCE_1','EXT_SOURCE_2','EXT_SOURCE_3','DAYS_BIRTH']].copy()
 
-
-
 poly_target = poly_features_train['TARGET'].copy()
 poly_features_train = poly_features_train.drop('TARGET',axis=1)
 # imputing na values
@@ -260,6 +258,7 @@ def impute_na(poly_features_train, poly_features_test):
     poly_test = imp.transform(poly_features_test)
     return poly_train, poly_test
 poly_train, poly_test = impute_na(poly_features_train, poly_features_test)
+poly_train.shape
 
 # create Polynomial features
 def create_poly_features(poly_train, poly_test):
@@ -274,6 +273,7 @@ def create_poly_features(poly_train, poly_test):
     print(poly_features_test.shape)
     return poly_features_train, poly_features_test
 poly_train, poly_test = create_poly_features(poly_train, poly_test)
+poly_train.shape
 
 poly_train['TARGET'] = poly_target
 
@@ -282,9 +282,10 @@ def poly_corr(poly_train):
     poly_corr = poly_train.corr()['TARGET'].sort_values()
     print(poly_corr)
 poly_corr(poly_train)
+poly_train.drop('1', axis=1, inplace=True)
 
 # Left join poly and app data
-def leftjoin_poly_app_data(poly_train, poly_test, app_train, app_test):
+def leftjoin_poly_app_data(poly_train, poly_test, app_train, app_test, target):
     poly_train['SK_ID_CURR'] = app_train['SK_ID_CURR']
     poly_test['SK_ID_CURR'] = app_train['SK_ID_CURR']
     app_train_poly = app_train.merge(poly_train, on='SK_ID_CURR', how= 'left')
@@ -293,11 +294,13 @@ def leftjoin_poly_app_data(poly_train, poly_test, app_train, app_test):
     print("Poly test shape", app_test_poly.shape)
 
     app_train_poly, app_test_poly = app_train_poly.align(app_test_poly, join='inner', axis = 1)
+    app_train_poly['TARGET'] = target
     print("Poly train shape:",app_train_poly.shape)
     print("Poly test shape", app_test_poly.shape)
     return app_train_poly, app_test_poly
-app_train_poly, app_test_poly = leftjoin_poly_app_data(poly_train, poly_test, app_train, app_test)
+app_train_poly, app_test_poly = leftjoin_poly_app_data(poly_train, poly_test, app_train, app_test, target=poly_target)
 
+app_train_poly = app_train_poly.dropna(subset=['TARGET'])
 
 # Domain features
 app_train.columns[:20]
@@ -379,12 +382,18 @@ test = app_test.copy()
 train_target = drop_target(train)
 drop_id(train)
 drop_id(test)
+
 # no need to scale in ensemble models
 train, test = pipeline(train, test)
 
+def a():
+    input('bir sayi giriniz')
+    print('Celine aşığım')
+a()
+
 def random_forest_results(train, test, train_target):
     rfc = RandomForestClassifier()
-    rfc.fit(train,train_target)
+    rfc.fit(train, train_target)
     proba = rfc.predict_proba(test)[:,1]
 
     # cross validation
@@ -395,21 +404,21 @@ random_forest_results(train, test, train_target) # cv around 0.74 - 0.75
 
 
 # Random Forest for polynomial features
-train = poly_train.copy()
-test = poly_test.copy()
+train = app_train_poly.copy()
+test = app_test_poly.copy()
 
 # preprocessing
-train_target = drop_target()
+train_target = drop_target(train)
+
 drop_id(train)
 drop_id(test)
 
 train, test = pipeline(train, test)
+random_forest_results(train, test, train_target) # cv around 0.70 - 71
 
-random_forest_results(train, test, train_target)
-
-# Random Forest for domain featues
-train = poly_train.copy()
-test = poly_test.copy()
+# Random Forest for domain features
+train = app_train_domain.copy()
+test = app_test_domain.copy()
 
 # Preprocessing
 train_target = drop_target(train)

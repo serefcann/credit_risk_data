@@ -82,10 +82,6 @@ The goal is to predict the probability of a client defaulting on a loan. The pro
 
 ---
 
-## 🚀 How to Run
 
-1. Clone this repo:
-   ```bash
-   git clone https://github.com/yourusername/credit-risk-prediction.git
 
 
